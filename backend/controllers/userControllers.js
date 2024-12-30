@@ -1,13 +1,17 @@
 const expressAsyncHandler = require("express-async-handler");
 const User = require("../models/userModel");
+const Chat = require("../models/chatModel");
 const generateToken = require("../config/generateToken");
 
 
 
 
 const registerUser = expressAsyncHandler(async (req, res) => {
-  const { name, email, password, pic } = req.body;
-
+  const { name, email, password, pic, ad } = req.body;
+  let isAdmin = false;
+  if(email === process.env.ADMIN_USER){
+    isAdmin = true;
+  }
 
   if (!name || !email || !password) {
     res.status(400);
@@ -26,18 +30,64 @@ const registerUser = expressAsyncHandler(async (req, res) => {
     email,
     password,
     pic,
+    isAdmin,
+    ad
   });
 
-  if (user) {
+  const adminUser = await User.findOne({ email: process.env.ADMIN_USER, isAdmin: true });
+
+  const added = await Chat.findOneAndUpdate(
+    {groupAdmin: (adminUser._id), isGroupChat: true},
+    {
+      $push: { users: user._id },
+    }
+  )
+    .populate("users", "-password")
+    .populate("groupAdmin", "-password");
+
+
+  if (!added) {
+    var users = [];
+    users.push(user);
+    try {
+      const groupChat = await Chat.create({
+        chatName: 'Community',
+        users: users,
+        isGroupChat: true,
+        groupAdmin: adminUser,
+      });
+
+      const FullGroupChat = await Chat.findOne({_id:groupChat._id})
+        .populate("users","-password")
+        .populate("groupAdmin","-password");
+
+        res.status(201).json({
+          _id: user._id,
+          name: user.name,
+          email: user.email,
+          pic: user.pic,
+          isAdmin: isAdmin,
+          ad: user.advertisement,
+          token: generateToken(user._id),
+        });
+
+    } catch (error) {
+      res.status(400);
+      throw new Error(error.message);
+    }
+  } else {
     res.status(201).json({
       _id: user._id,
       name: user.name,
       email: user.email,
       pic: user.pic,
+      isAdmin: isAdmin,
+      ad: user.advertisement,
       token: generateToken(user._id),
     });
+  }
 
-  } else {
+  if(!user) {
     res.status(401);
     throw new Error("Unable to create user")
   }
@@ -56,6 +106,7 @@ const authUser = expressAsyncHandler(async (req, res) => {
       name: user.name,
       email: user.email,
       pic: user.pic,
+      isAdmin: user.isAdmin,
       token: generateToken(user._id),
     })
   } else {

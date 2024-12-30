@@ -46,7 +46,41 @@ const accessChat = expressAsyncHandler(async(req,res)=>{
     }
 });
 
+const accessAdmin = expressAsyncHandler(async(req,res)=>{
+  const adminUser = await User.findOne({ email: process.env.ADMIN_USER, isAdmin: true });
+  var isChat = await Chat.find({
+    isGroupChat:false,
+    $and:[
+      {users:{$elemMatch:{$eq:req.user._id}}},
+      {users:{$elemMatch:{$eq:adminUser._id}}}
+    ]
+  }).populate("users","-password")
+    .populate("latestMessage");
+  
+  isChat = await User.populate(isChat,{
+    path:"latestMessage.sender",
+    select:"name pic email",
+  });
 
+    if(isChat.length > 0){
+      res.send(isChat[0]);
+    } else { 
+      var chatData = {
+        chatName:"sender",
+        isGroupChat:"false",
+        users:[adminUser._id,req.user._id], 
+      };
+
+      try {
+        const createChat = await Chat.create(chatData);
+        const FullChat = await Chat.findOne({_id:createChat._id}).populate("users","-password");
+        res.status(200).send(FullChat);
+      } catch (error) {
+        res.status(400);
+        throw new Error(error.message);
+      }
+    }
+});
 
 const fetchChats = expressAsyncHandler( async (req,res)=>{
   try {
@@ -76,9 +110,9 @@ const createGroupChat = expressAsyncHandler(async(req,res)=>{
 
   var users = JSON.parse(req.body.users);
 
-  if(users.length < 2){
-    res.status(400).send("Group must contain atleast 3 participants");
-  }
+  // if(users.length < 2){
+  //   res.status(400).send("Group must contain atleast 3 participants");
+  // }
   users.push(req.user);
   try {
     const groupChat = await Chat.create({
@@ -171,4 +205,4 @@ const addToGroup = expressAsyncHandler(async (req, res) => {
   }
 });
 
-module.exports = {accessChat,fetchChats,createGroupChat,renameGroup,removeFromGroup,addToGroup};
+module.exports = {accessChat,fetchChats,createGroupChat,renameGroup,removeFromGroup,addToGroup,accessAdmin};

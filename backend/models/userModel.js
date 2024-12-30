@@ -6,6 +6,8 @@ const userModel = mongoose.Schema({
   email:{type:String,required:true,unique:true},
   password:{type:String,required:true},
   pic:{type:String,default:"https://icon-library.com/images/anonymous-avatar-icon/anonymous-avatar-icon-25.jpg"},
+  isAdmin:{type: Boolean},
+  advertisement:{type: Boolean, default: true}
 },
 {
   timestams:true,
